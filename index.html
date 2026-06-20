@@ -3,517 +3,1356 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Construction Hard Hat Safety Monitor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
+    <title>Construction Site Safety Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#2563eb',
-                        safe: '#16a34a',
-                        danger: '#dc2626',
-                        neutral: '#f3f4f6',
-                        labelBg: '#dbeafe',
-                    },
-                }
-            }
-        }
-    </script>
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        .section-label {
-            @apply bg-labelBg text-primary font-medium px-3 py-1 rounded-md inline-block mb-3 text-sm;
-        }
-        .clickable-label {
-            @apply cursor-pointer hover:bg-blue-200 transition-colors;
-        }
-        .tab-active {
-            @apply bg-primary text-white;
-        }
-        .tab-inactive {
-            @apply bg-neutral text-gray-600 hover:bg-gray-200;
-        }
-        .dropzone {
-            @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors;
-        }
-        .media-container {
-            position: relative;
-        }
-        #annotationCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        #imagePreview, #videoPreview, #webcamPreview {
-            max-height: 500px;
-            object-fit: contain;
-            width: 100%;
-        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+        .header{background:#fff;padding:14px 32px;border-bottom:1px solid #e0e0e0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+        .header h1{font-size:18px;color:#1a73e8;font-weight:700}
+        .header p{font-size:12px;color:#888;margin-top:2px}
+        .nav-tabs{display:flex;background:#fff;border-bottom:2px solid #e0e0e0;padding:0 32px;overflow-x:auto}
+        .nav-tab{padding:12px 24px;cursor:pointer;font-size:13px;color:#777;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .3s;white-space:nowrap;user-select:none}
+        .nav-tab:hover{color:#1a73e8;background:#f8f9fa}
+        .nav-tab.active{color:#1a73e8;border-bottom-color:#1a73e8;font-weight:600}
+        .tab-content{display:none;padding:24px 32px;max-width:1400px;margin:0 auto}
+        .tab-content.active{display:block}
+        .columns{display:flex;gap:24px}
+        .col-left,.col-right{flex:1;min-width:0}
+        .card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+        .card-header{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+        .card-header i{color:#1a73e8;font-size:16px}
+        .card-header h2{font-size:15px;font-weight:600}
+        .input-type-selector{display:flex;gap:8px;margin-bottom:16px}
+        .input-type-btn{padding:8px 18px;border:1.5px solid #d5d5d5;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;color:#666;transition:all .25s;display:flex;align-items:center;gap:6px}
+        .input-type-btn:hover{border-color:#1a73e8;color:#1a73e8}
+        .input-type-btn.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
+        .model-banner{border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;display:flex;align-items:center;gap:8px}
+        .model-banner.loading{background:#fff3cd;border:1px solid #ffc107;color:#856404}
+        .model-banner.success{background:#d1fae5;border:1px solid #22c55e;color:#065f46}
+        .model-banner.error{background:#fee2e2;border:1px solid #ef4444;color:#991b1b}
+        .spinner-small{width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+        .upload-wrapper{position:relative;margin-bottom:16px}
+        .upload-area{border:2px dashed #ccc;border-radius:12px;padding:32px 16px;text-align:center;transition:all .3s;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafbfc;position:relative}
+        .upload-area:hover{border-color:#1a73e8;background:#f0f7ff}
+        .upload-area.dragover{border-color:#1a73e8;background:#e8f0fe}
+        .upload-area i.upload-icon{font-size:36px;color:#bbb;margin-bottom:10px}
+        .upload-area p{color:#999;font-size:13px}
+        .upload-area .subtext{font-size:11px;color:#ccc;margin:4px 0}
+        .upload-area .preview-img{max-width:100%;max-height:170px;border-radius:8px;display:none}
+        .upload-area .upload-text{display:flex;flex-direction:column;align-items:center}
+        .upload-area.has-file .upload-text{display:none}
+        .upload-area.has-file .preview-img{display:block}
+        .upload-area.has-file{padding:12px;border-style:solid;border-color:#22c55e}
+        .video-preview-container{width:100%;text-align:center;display:none}
+        .video-preview-container video{max-width:100%;max-height:170px;border-radius:8px}
+        .btn-group{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+        .btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .25s;display:flex;align-items:center;gap:6px}
+        .btn:disabled{opacity:.5;cursor:not-allowed}
+        .btn-primary{background:#1a73e8;color:#fff}
+        .btn-primary:hover:not(:disabled){background:#1557b0}
+        .btn-danger{background:#fff;color:#d93025;border:1.5px solid #d93025}
+        .btn-danger:hover:not(:disabled){background:#fce8e6}
+        .btn-secondary{background:#fff;color:#555;border:1.5px solid #d0d0d0}
+        .btn-secondary:hover{background:#f5f5f5}
+        .progress-bar{width:100%;height:5px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin:10px 0;display:none}
+        .progress-fill{height:100%;background:#1a73e8;border-radius:3px;transition:width .3s;width:0%}
+        .stats-section{margin-top:14px}
+        .stats-section h3{font-size:13px;color:#333;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+        .stats-section h3 i{color:#1a73e8}
+        .stat-item{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:13px}
+        .stat-item strong{min-width:140px}
+        .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+        .status-dot.safe{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.5)}
+        .status-dot.unsafe{background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,.5);animation:pulse 1s infinite}
+        .status-dot.neutral{background:#94a3b8}
+        .output-area{border:1px solid #e8e8e8;border-radius:12px;min-height:320px;display:flex;align-items:center;justify-content:center;background:#fafbfc;margin-bottom:16px;overflow:hidden}
+        .output-area canvas,.output-area video{max-width:100%;max-height:420px;display:none;border-radius:8px}
+        .output-placeholder{text-align:center;color:#bbb}
+        .output-placeholder i{font-size:48px;margin-bottom:10px;display:block}
+        .results-header{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px;color:#333}
+        .results-header i{color:#1a73e8}
+        .results-table{width:100%;border-collapse:collapse;font-size:12px}
+        .results-table th{background:#f5f7fa;padding:8px 10px;text-align:left;font-weight:600;color:#555;border-bottom:2px solid #e8e8e8}
+        .results-table td{padding:7px 10px;border-bottom:1px solid #f0f0f0}
+        .results-table tr:hover td{background:#f8f9fa}
+        .badge{padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600}
+        .badge-safe{background:#dcfce7;color:#166534}
+        .badge-unsafe{background:#fee2e2;color:#991b1b}
+        .badge-helmet{background:#dbeafe;color:#1e40af}
+        .badge-features{background:#f3e8ff;color:#6b21a8;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px;display:inline-block}
+        .filter-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+        .filter-bar select{padding:7px 12px;border:1px solid #d0d0d0;border-radius:8px;font-size:13px;background:#fff}
+        .empty-state{text-align:center;padding:50px 20px;color:#bbb}
+        .empty-state i{font-size:42px;margin-bottom:10px;display:block}
+        .metric-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:24px}
+        .metric-card{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+        .metric-card .value{font-size:30px;font-weight:700;color:#1a73e8}
+        .metric-card .label{font-size:11px;color:#999;margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+        .chart-box{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.07);margin-bottom:16px}
+        .chart-box h3{font-size:14px;margin-bottom:16px}
+        .bar-chart{display:flex;align-items:flex-end;gap:12px;height:160px;padding-top:10px}
+        .bar-col{display:flex;flex-direction:column;align-items:center;flex:1}
+        .bar{width:100%;border-radius:6px 6px 0 0;transition:height .5s;min-height:2px}
+        .bar-label{font-size:11px;color:#888;margin-top:6px;text-align:center}
+        .bar-value{font-size:11px;font-weight:600;margin-bottom:4px}
+        .alarm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(239,68,68,.08);pointer-events:none;z-index:999;animation:alarmFlash .5s ease-in-out 6;display:none}
+        .webcam-container video{width:100%;border-radius:8px}
+        .feature-analysis{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:#475569}
+        .feature-analysis h4{font-size:12px;color:#1e293b;margin-bottom:6px;font-weight:600}
+        .feature-tag{display:inline-block;padding:2px 8px;margin:2px;border-radius:4px;font-size:10px;font-weight:500}
+        .feature-tag.found{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
+        .feature-tag.missing{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        @keyframes alarmFlash{0%,100%{background:rgba(239,68,68,.08)}50%{background:rgba(239,68,68,.18)}}
+        .hidden{display:none!important}
+        @media(max-width:800px){.columns{flex-direction:column}.tab-content{padding:16px}.nav-tabs{padding:0 16px}}
     </style>
 </head>
-<body class="bg-white text-gray-800 min-h-screen p-6">
-    <div class="max-w-7xl mx-auto">
-        <h1 class="text-xl font-semibold mb-6 flex items-center gap-2">
-            <i class="fas fa-hard-hat text-primary"></i>
-            Construction Site Hard Hat Safety Monitor
-        </h1>
+<body>
+<div id="alarmOverlay" class="alarm-overlay"></div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- LEFT COLUMN: Input Controls -->
-            <div>
-                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <i class="fas fa-sliders"></i> Input Controls
-                </h2>
+<header class="header">
+    <h1><i class="fas fa-hard-hat"></i> Construction Site Safety Monitor</h1>
+    <p>AI-Powered Hard Hat Detection — Based on Real Helmet Features</p>
+</header>
 
-                <div class="mb-6">
-                    <div class="section-label flex items-center gap-2">
-                        <i class="fas fa-mouse-pointer"></i> Select Input Type
-                    </div>
-                    <div class="flex gap-2 mb-5 flex-wrap">
-                        <button id="tabImage" class="tab-active px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2">
-                            <i class="fas fa-image"></i> Image
-                        </button>
-                        <button id="tabVideo" class="tab-inactive px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2">
-                            <i class="fas fa-video"></i> Video
-                        </button>
-                        <button id="tabWebcam" class="tab-inactive px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2">
-                            <i class="fas fa-camera"></i> Webcam
-                        </button>
+<nav class="nav-tabs">
+    <div class="nav-tab active" onclick="switchTab('dashboard')">
+        <i class="fas fa-tachometer-alt"></i> Detection Dashboard
+    </div>
+    <div class="nav-tab" onclick="switchTab('reports')">
+        <i class="fas fa-history"></i> History & Reports
+    </div>
+    <div class="nav-tab" onclick="switchTab('statistics')">
+        <i class="fas fa-chart-pie"></i> Overall Statistics
+    </div>
+</nav>
+
+<div id="tab-dashboard" class="tab-content active">
+    <div class="columns">
+        <div class="col-left">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-sliders-h"></i>
+                    <h2>Input Controls</h2>
+                </div>
+                <div class="input-type-selector">
+                    <button class="input-type-btn active" id="btnImage" onclick="switchInputType('image')">
+                        <i class="fas fa-image"></i> Image
+                    </button>
+                    <button class="input-type-btn" id="btnVideo" onclick="switchInputType('video')">
+                        <i class="fas fa-video"></i> Video
+                    </button>
+                    <button class="input-type-btn" id="btnWebcam" onclick="switchInputType('webcam')">
+                        <i class="fas fa-camera"></i> Webcam
+                    </button>
+                </div>
+                <div id="modelBanner" class="model-banner loading">
+                    <div class="spinner-small"></div>
+                    <span>Loading AI Model...</span>
+                </div>
+
+                <div id="imageUploadSection">
+                    <div class="upload-wrapper">
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="imageInput" accept="image/png,image/jpeg,image/jpg,image/webp"
+                                   style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;">
+                            <div class="upload-text">
+                                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                <p><strong>Drop Image Here</strong></p>
+                                <p class="subtext">- or -</p>
+                                <p>Click to Upload</p>
+                                <p class="subtext" style="margin-top:6px;">Supports: JPG, PNG, JPEG, WebP</p>
+                            </div>
+                            <img id="imagePreview" class="preview-img" alt="Preview">
+                        </div>
                     </div>
                 </div>
 
-                <div class="mb-6">
-                    <div id="uploadLabel" class="section-label flex items-center gap-2 clickable-label">
-                        <i class="fas fa-upload"></i> Upload Image
-                    </div>
-
-                    <div id="dropzone" class="dropzone mb-4" role="button">
-                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
-                        <p class="text-gray-500 mb-1" id="dropText">Drop Image Here</p>
-                        <p class="text-gray-400 text-sm">- or -</p>
-                        <button type="button" class="mt-2 bg-primary/10 text-primary px-4 py-1.5 rounded-md text-sm font-medium hover:bg-primary/20 transition-colors" id="browseBtn">
-                            Browse Files
-                        </button>
-                        <input type="file" id="fileInput" class="hidden" accept="image/*">
-                    </div>
-
-                    <div id="webcamControl" class="hidden mb-4">
-                        <button id="startWebcamBtn" class="w-full bg-primary text-white py-3 rounded-md font-medium hover:bg-primary/90 transition-colors">
-                            <i class="fas fa-camera mr-2"></i> Enable Live Webcam
-                        </button>
-                    </div>
-
-                    <div class="media-container hidden rounded-lg overflow-hidden border border-gray-200 mb-4" id="mediaPreview">
-                        <img id="imagePreview" class="w-full hidden" />
-                        <video id="videoPreview" class="w-full hidden" controls></video>
-                        <video id="webcamPreview" class="w-full hidden" autoplay muted></video>
-                        <canvas id="annotationCanvas"></canvas>
-                        <canvas id="headScanCanvas" class="hidden"></canvas>
+                <div id="videoUploadSection" class="hidden">
+                    <div class="upload-wrapper">
+                        <div class="upload-area" id="videoUploadArea">
+                            <input type="file" id="videoInput" accept="video/mp4,video/avi,video/mov,video/webm"
+                                   style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;">
+                            <div class="upload-text">
+                                <i class="fas fa-film upload-icon"></i>
+                                <p><strong>Drop Video Here</strong></p>
+                                <p class="subtext">- or -</p>
+                                <p>Click to Upload</p>
+                            </div>
+                        </div>
+                        <div id="videoPreviewBox" class="video-preview-container">
+                            <video id="videoPreview" controls></video>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-6 mb-6 justify-center">
-                    <button id="startBtn" class="bg-primary text-white px-8 py-2.5 rounded-md font-semibold hover:bg-primary/90 transition-colors flex items-center gap-2">
+                <div id="webcamSection" class="hidden">
+                    <button id="enableWebcamBtn" class="btn btn-secondary" style="width:100%;justify-content:center;" onclick="enableWebcam()">
+                        <i class="fas fa-camera"></i> Enable Webcam
+                    </button>
+                    <div id="webcamPreviewBox" class="webcam-container hidden" style="margin-top:12px;">
+                        <video id="webcamPreviewVideo" muted autoplay playsinline style="width:100%;border-radius:8px;"></video>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button id="startBtn" class="btn btn-primary" onclick="startDetection()" disabled>
                         <i class="fas fa-play"></i> Start Detection
                     </button>
-                    <label class="flex items-center gap-2 cursor-pointer select-none">
-                        <input type="checkbox" id="stopCheck" class="w-4 h-4">
-                        <span class="font-medium">Stop Detection</span>
-                    </label>
-                </div>
-                <div class="text-center mb-8">
-                    <button id="resetBtn" class="font-medium flex items-center gap-2 mx-auto hover:text-primary transition-colors">
+                    <button id="stopBtn" class="btn btn-danger" onclick="stopDetection()" disabled>
+                        <i class="fas fa-stop"></i> Stop Detection
+                    </button>
+                    <button id="resetBtn" class="btn btn-secondary" onclick="resetAll()">
                         <i class="fas fa-redo"></i> Reset
                     </button>
                 </div>
 
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <i class="fas fa-chart-bar"></i> Dashboard Statistics
-                    </h3>
-                    <div class="section-label">Statistics</div>
-                    <div class="mt-4 space-y-3">
-                        <div class="flex items-center justify-between p-3 bg-neutral rounded-md">
-                            <span>Site Status:</span>
-                            <span id="siteStatus" class="flex items-center gap-2 font-semibold text-gray-500">
-                                <i class="fas fa-circle text-gray-400"></i> IDLE
-                            </span>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-neutral rounded-md">
-                            <span>Workers Detected:</span>
-                            <span id="personCount" class="font-semibold">0</span>
-                        </div>
-                        <div class="flex items-center justify-between p-3 bg-neutral rounded-md">
-                            <span>Missing Helmet Violations:</span>
-                            <span id="violationCount" class="font-semibold">0</span>
-                        </div>
+                <div id="progressBar" class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+
+                <div class="stats-section">
+                    <h3><i class="fas fa-chart-bar"></i> Dashboard Statistics</h3>
+                    <div class="stat-item">
+                        <div id="statusDot" class="status-dot neutral"></div>
+                        <span id="statusText">WAITING FOR INPUT</span>
                     </div>
-                    <div class="mt-6 flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                        <span class="flex items-center gap-2"><i class="fas fa-square text-safe"></i> Safe (Hard Hat Worn, any color)</span>
-                        <span class="flex items-center gap-2"><i class="fas fa-square text-danger"></i> Unsafe (No Hard Hat)</span>
-                    </div>
+                    <div class="stat-item"><strong>Workers Detected:</strong><span id="personsCount">0</span></div>
+                    <div class="stat-item"><strong>With Hard Hat:</strong><span id="safeCount" style="color:#22c55e;font-weight:700;">0</span></div>
+                    <div class="stat-item"><strong>No Hard Hat:</strong><span id="violationsCount" style="color:#ef4444;font-weight:700;">0</span></div>
+                    <div class="stat-item"><strong>Total Objects:</strong><span id="totalDetections">0</span></div>
                 </div>
             </div>
+        </div>
 
-            <!-- RIGHT COLUMN: Detection Output -->
-            <div>
-                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <i class="fas fa-search"></i> Detection Output
-                </h2>
-
-                <div class="section-label flex items-center gap-2 mb-3">
-                    <i class="fas fa-image"></i> Annotated Output
+        <div class="col-right">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-search"></i>
+                    <h2>Detection Output</h2>
+                </div>
+                <div style="font-size:13px;font-weight:600;color:#1a73e8;margin-bottom:8px;">
+                    <i class="fas fa-eye"></i> Annotated Output
+                </div>
+                <div id="outputArea" class="output-area">
+                    <div id="outputPlaceholder" class="output-placeholder">
+                        <i class="fas fa-image"></i>
+                        <p>Output will appear here</p>
+                    </div>
+                    <canvas id="outputCanvas"></canvas>
                 </div>
 
-                <div id="outputPlaceholder" class="w-full h-[350px] border border-gray-200 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 mb-6">
-                    <i class="fas fa-expand text-xl"></i>
+                <!-- Feature Analysis Display -->
+                <div id="featureAnalysisBox" class="feature-analysis hidden">
+                    <h4><i class="fas fa-microscope"></i> Hard Hat Feature Analysis (Per Worker)</h4>
+                    <div id="featureAnalysisContent"></div>
                 </div>
 
-                <div class="section-label flex items-center gap-2 mb-3">
-                    <i class="fas fa-file-alt"></i> Detection Results
+                <div class="results-header">
+                    <i class="fas fa-clipboard-list"></i> Detection Results
                 </div>
-                <div id="resultsLog" class="w-full h-[200px] border border-gray-200 rounded-lg p-3 overflow-y-auto bg-gray-50 text-sm">
-                    <p class="text-gray-400 text-center mt-16">Run detection to see results</p>
+                <div id="resultsArea" style="max-height:300px;overflow-y:auto;">
+                    <div class="empty-state">
+                        <i class="fas fa-clipboard"></i>
+                        <p>No detections yet. Upload an image to start.</p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
+
+<div id="tab-reports" class="tab-content">
+    <div class="card">
+        <div class="card-header"><i class="fas fa-history"></i><h2>Detection History</h2></div>
+        <div class="filter-bar">
+            <select id="filterStatus" onchange="renderHistory()">
+                <option value="all">All Status</option>
+                <option value="SAFE">SITE SAFE</option>
+                <option value="UNSAFE">UNSAFE</option>
+            </select>
+            <select id="filterType" onchange="renderHistory()">
+                <option value="all">All Types</option>
+                <option value="Image">Image</option>
+                <option value="Video">Video</option>
+                <option value="Webcam">Webcam</option>
+            </select>
+            <button class="btn btn-secondary" onclick="exportCSV()"><i class="fas fa-download"></i> Export CSV</button>
+            <button class="btn btn-danger" onclick="clearHistory()"><i class="fas fa-trash"></i> Clear History</button>
+        </div>
+        <div id="historyTable"></div>
+    </div>
+</div>
+
+<div id="tab-statistics" class="tab-content">
+    <div id="metricsContainer"></div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div class="chart-box" style="flex:1;min-width:300px;">
+            <h3><i class="fas fa-chart-pie" style="color:#1a73e8;"></i> Safe vs Unsafe</h3>
+            <div id="safeUnsafeChart"></div>
+        </div>
+        <div class="chart-box" style="flex:1;min-width:300px;">
+            <h3><i class="fas fa-chart-bar" style="color:#1a73e8;"></i> Input Type Distribution</h3>
+            <div id="inputTypeChart"></div>
+        </div>
+    </div>
+    <div class="chart-box" style="margin-top:16px;">
+        <h3><i class="fas fa-chart-line" style="color:#1a73e8;"></i> Detection Activity</h3>
+        <div id="activityChart"></div>
+    </div>
+</div>
 
 <script>
-let activeInputType = 'image';
-let detectionRunning = false;
-let personModel = null;
-let lastAlarmTime = 0;
-let webcamStream = null;
-let detectionLoop = null;
-let totalPersons = 0;
-let totalViolations = 0;
+// =============================================
+// ========== GLOBAL STATE =====================
+// =============================================
+const state = {
+    model: null,
+    modelLoaded: false,
+    isDetecting: false,
+    inputType: 'image',
+    currentFile: null,
+    currentFileName: '',
+    webcamStream: null,
+    animationFrameId: null,
+    history: JSON.parse(localStorage.getItem('safetyHistory') || '[]'),
+    videoElement: null
+};
 
-const tabImage = document.getElementById('tabImage');
-const tabVideo = document.getElementById('tabVideo');
-const tabWebcam = document.getElementById('tabWebcam');
-const dropzone = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
-const uploadLabel = document.getElementById('uploadLabel');
-const browseBtn = document.getElementById('browseBtn');
-const webcamControl = document.getElementById('webcamControl');
-const mediaPreview = document.getElementById('mediaPreview');
-const imagePreview = document.getElementById('imagePreview');
-const videoPreview = document.getElementById('videoPreview');
-const webcamPreview = document.getElementById('webcamPreview');
-const annotationCanvas = document.getElementById('annotationCanvas');
-const headScanCanvas = document.getElementById('headScanCanvas');
-const outputPlaceholder = document.getElementById('outputPlaceholder');
-const startBtn = document.getElementById('startBtn');
-const stopCheck = document.getElementById('stopCheck');
-const resetBtn = document.getElementById('resetBtn');
-const siteStatus = document.getElementById('siteStatus');
-const personCount = document.getElementById('personCount');
-const violationCount = document.getElementById('violationCount');
-const resultsLog = document.getElementById('resultsLog');
-const startWebcamBtn = document.getElementById('startWebcamBtn');
-const ctx = annotationCanvas.getContext('2d');
-const scanCtx = headScanCanvas.getContext('2d', { willReadFrequently: true });
-
-// File upload handlers
-function openFilePicker() {
-    if (activeInputType === 'image') fileInput.accept = "image/*";
-    if (activeInputType === 'video') fileInput.accept = "video/*";
-    fileInput.value = '';
-    fileInput.click();
-}
-uploadLabel.addEventListener('click', openFilePicker);
-dropzone.addEventListener('click', (e) => { if (e.target !== browseBtn) openFilePicker(); });
-browseBtn.addEventListener('click', (e) => { e.stopPropagation(); openFilePicker(); });
-
-function setActiveTab(type) {
-    activeInputType = type;
-    resetAll();
-    [tabImage, tabVideo, tabWebcam].forEach(tab => {
-        tab.classList.remove('tab-active');
-        tab.classList.add('tab-inactive');
-    });
-    if (type === 'image') {
-        tabImage.classList.add('tab-active');
-        uploadLabel.innerHTML = `<i class="fas fa-upload"></i> Upload Image`;
-        dropText.textContent = "Drop Image Here";
-        browseBtn.textContent = "Browse Image Files";
-        dropzone.classList.remove('hidden');
-        webcamControl.classList.add('hidden');
-    } else if (type === 'video') {
-        tabVideo.classList.add('tab-active');
-        uploadLabel.innerHTML = `<i class="fas fa-upload"></i> Upload Video`;
-        dropText.textContent = "Drop Video Here";
-        browseBtn.textContent = "Browse Video Files";
-        dropzone.classList.remove('hidden');
-        webcamControl.classList.add('hidden');
-    } else {
-        tabWebcam.classList.add('tab-active');
-        dropzone.classList.add('hidden');
-        webcamControl.classList.remove('hidden');
-    }
-}
-tabImage.addEventListener('click', () => setActiveTab('image'));
-tabVideo.addEventListener('click', () => setActiveTab('video'));
-tabWebcam.addEventListener('click', () => setActiveTab('webcam'));
-
-dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('border-primary'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-primary'));
-dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('border-primary');
-    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
-
-function handleFile(file) {
-    resetPreview();
-    const fileURL = URL.createObjectURL(file);
-    if (activeInputType === 'image') {
-        if (!file.type.startsWith('image/')) { alert("Select a valid image file"); return; }
-        imagePreview.src = fileURL;
-        imagePreview.onload = () => {
-            mediaPreview.classList.remove('hidden');
-            outputPlaceholder.classList.add('hidden');
-            imagePreview.classList.remove('hidden');
-        }
-    } else {
-        if (!file.type.startsWith('video/')) { alert("Select a valid video file"); return; }
-        videoPreview.src = fileURL;
-        videoPreview.classList.remove('hidden');
-        mediaPreview.classList.remove('hidden');
-        outputPlaceholder.classList.add('hidden');
-    }
-}
-
-startWebcamBtn.addEventListener('click', async () => {
+// =============================================
+// ========== INIT MODEL =======================
+// =============================================
+async function initModel() {
+    const banner = document.getElementById('modelBanner');
+    banner.className = 'model-banner loading';
+    banner.innerHTML = '<div class="spinner-small"></div><span>Loading AI Model (COCO-SSD)...</span>';
     try {
-        webcamStream = await navigator.mediaDevices.getUserMedia({video: true});
-        webcamPreview.srcObject = webcamStream;
-        webcamPreview.classList.remove('hidden');
-        mediaPreview.classList.remove('hidden');
-        outputPlaceholder.classList.add('hidden');
-        startWebcamBtn.textContent = "Webcam Active";
-        startWebcamBtn.disabled = true;
-    } catch { alert("Allow camera permissions to use webcam mode"); }
+        state.model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+        state.modelLoaded = true;
+        banner.className = 'model-banner success';
+        banner.innerHTML = '<i class="fas fa-check-circle"></i><span>AI Model Loaded — Hard Hat Feature Detection Ready</span>';
+        updateStartButton();
+    } catch (err) {
+        console.error(err);
+        banner.className = 'model-banner error';
+        banner.innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>Failed to load model. Refresh page.</span>';
+    }
+}
+
+// =============================================
+// ========== TAB NAVIGATION ====================
+// =============================================
+function switchTab(tab) {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const tabs = { dashboard: 0, reports: 1, statistics: 2 };
+    document.querySelectorAll('.nav-tab')[tabs[tab]].classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'reports') renderHistory();
+    if (tab === 'statistics') renderStatistics();
+}
+
+function switchInputType(type) {
+    stopDetection();
+    state.inputType = type;
+    document.querySelectorAll('.input-type-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn' + type.charAt(0).toUpperCase() + type.slice(1)).classList.add('active');
+    document.getElementById('imageUploadSection').classList.toggle('hidden', type !== 'image');
+    document.getElementById('videoUploadSection').classList.toggle('hidden', type !== 'video');
+    document.getElementById('webcamSection').classList.toggle('hidden', type !== 'webcam');
+    updateStartButton();
+}
+
+function updateStartButton() {
+    const btn = document.getElementById('startBtn');
+    if (state.inputType === 'webcam') btn.disabled = !state.modelLoaded || state.isDetecting || !state.webcamStream;
+    else btn.disabled = !state.modelLoaded || !state.currentFile || state.isDetecting;
+}
+
+// =============================================
+// ========== IMAGE UPLOAD ======================
+// =============================================
+const imageInput = document.getElementById('imageInput');
+imageInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    state.currentFile = file;
+    state.currentFileName = file.name;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        document.getElementById('imagePreview').src = ev.target.result;
+        document.getElementById('uploadArea').classList.add('has-file');
+    };
+    reader.readAsDataURL(file);
+    updateStartButton();
 });
 
-// ==============================================
-// HARD HAT DETECTION TUNED TO YOUR REFERENCE IMAGE
-// Detects shape features, ignores color
-// ==============================================
-function isHardHatWorn(media, personBbox) {
-    const [x, y, w, h] = personBbox;
-    // Crop ONLY the zone where a hard hat sits: 10% above head top, down to forehead
-    const hatZoneY = Math.max(0, y - (h * 0.10));
-    const hatZoneH = h * 0.25;
-    const hatZoneX = x;
-    const hatZoneW = w;
-
-    headScanCanvas.width = hatZoneW;
-    headScanCanvas.height = hatZoneH;
-    scanCtx.drawImage(media, hatZoneX, hatZoneY, hatZoneW, hatZoneH, 0, 0, hatZoneW, hatZoneH);
-    const pixels = scanCtx.getImageData(0,0, hatZoneW, hatZoneH).data;
-
-    let hardHatScore = 0;
-    let glossyPixels = 0;
-    let curvedEdgeCount = 0;
-    let brimEdgeCount = 0;
-    const totalPixels = pixels.length /4;
-
-    // Feature 1: Count glossy/specular highlights (smooth hard plastic has bright reflections, soft fabric/hair does not)
-    for (let i = 0; i < pixels.length; i +=4) {
-        const r = pixels[i], g = pixels[i+1], b = pixels[i+2];
-        const brightness = (r + g + b)/3;
-        if (brightness > 200) glossyPixels++;
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.add('dragover'); });
+uploadArea.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.remove('dragover'); });
+uploadArea.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation(); uploadArea.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+        const dt = new DataTransfer(); dt.items.add(files[0]); imageInput.files = dt.files;
+        state.currentFile = files[0]; state.currentFileName = files[0].name;
+        const reader = new FileReader();
+        reader.onload = function(ev) { document.getElementById('imagePreview').src = ev.target.result; uploadArea.classList.add('has-file'); };
+        reader.readAsDataURL(files[0]);
+        updateStartButton();
     }
-    if (glossyPixels / totalPixels > 0.03) hardHatScore += 1;
+});
 
-    // Feature 2: Detect horizontal brim edge at bottom of the hat zone (forehead level)
-    for (let pxX = Math.floor(hatZoneW*0.2); pxX < Math.floor(hatZoneW*0.8); pxX++) {
-        const yPos = Math.floor(hatZoneH * 0.8);
-        const idx = (yPos * hatZoneW + pxX) *4;
-        const nextIdx = ((yPos+2) * hatZoneW + pxX)*4;
-        const bright1 = (pixels[idx] + pixels[idx+1] + pixels[idx+2])/3;
-        const bright2 = (pixels[nextIdx] + pixels[nextIdx+1] + pixels[nextIdx+2])/3;
-        if (Math.abs(bright1 - bright2) > 40) brimEdgeCount++;
+// Video upload
+const videoInput = document.getElementById('videoInput');
+videoInput.addEventListener('change', function(e) {
+    const file = e.target.files[0]; if (!file) return;
+    state.currentFile = file; state.currentFileName = file.name;
+    document.getElementById('videoPreview').src = URL.createObjectURL(file);
+    document.getElementById('videoPreviewBox').style.display = 'block';
+    document.getElementById('videoUploadArea').classList.add('has-file');
+    updateStartButton();
+});
+
+const videoUploadArea = document.getElementById('videoUploadArea');
+videoUploadArea.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); videoUploadArea.classList.add('dragover'); });
+videoUploadArea.addEventListener('dragleave', e => { e.preventDefault(); e.stopPropagation(); videoUploadArea.classList.remove('dragover'); });
+videoUploadArea.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation(); videoUploadArea.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].type.startsWith('video/')) {
+        const dt = new DataTransfer(); dt.items.add(files[0]); videoInput.files = dt.files;
+        state.currentFile = files[0]; state.currentFileName = files[0].name;
+        document.getElementById('videoPreview').src = URL.createObjectURL(files[0]);
+        document.getElementById('videoPreviewBox').style.display = 'block';
+        videoUploadArea.classList.add('has-file');
+        updateStartButton();
     }
-    if (brimEdgeCount > (hatZoneW * 0.3)) hardHatScore +=1;
+});
 
-    // Feature 3: Detect curved dome top edge (the rounded crown of a hard hat)
-    const topEdgeY = [];
-    for (let pxX = 0; pxX < hatZoneW; pxX++) {
-        for (let pxY = 0; pxY < hatZoneH/2; pxY++) {
-            const idx = (pxY * hatZoneW + pxX)*4;
-            const nextIdx = ((pxY+2)*hatZoneW + pxX)*4;
-            const b1 = (pixels[idx]+pixels[idx+1]+pixels[idx+2])/3;
-            const b2 = (pixels[nextIdx]+pixels[nextIdx+1]+pixels[nextIdx+2])/3;
-            if (Math.abs(b1 - b2) > 35) {
-                topEdgeY[pxX] = pxY;
-                break;
-            }
+// Webcam
+async function enableWebcam() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        state.webcamStream = stream;
+        const vid = document.getElementById('webcamPreviewVideo');
+        vid.srcObject = stream; vid.play();
+        document.getElementById('webcamPreviewBox').classList.remove('hidden');
+        document.getElementById('enableWebcamBtn').innerHTML = '<i class="fas fa-video-slash"></i> Disable Webcam';
+        document.getElementById('enableWebcamBtn').onclick = disableWebcam;
+        updateStartButton();
+    } catch (err) { alert('Could not access webcam: ' + err.message); }
+}
+
+function disableWebcam() {
+    if (state.webcamStream) { state.webcamStream.getTracks().forEach(t => t.stop()); state.webcamStream = null; }
+    document.getElementById('webcamPreviewVideo').srcObject = null;
+    document.getElementById('webcamPreviewBox').classList.add('hidden');
+    document.getElementById('enableWebcamBtn').innerHTML = '<i class="fas fa-camera"></i> Enable Webcam';
+    document.getElementById('enableWebcamBtn').onclick = enableWebcam;
+    updateStartButton();
+}
+
+// =============================================
+// ========== START / STOP / RESET ==============
+// =============================================
+async function startDetection() {
+    if (!state.modelLoaded) return alert('Model still loading...');
+    state.isDetecting = true;
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('progressBar').style.display = 'block';
+    try {
+        if (state.inputType === 'image') await detectImage();
+        else if (state.inputType === 'video') await detectVideo();
+        else detectWebcamLoop();
+    } catch (err) { console.error(err); alert('Detection failed: ' + err.message); }
+    state.isDetecting = false;
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('progressBar').style.display = 'none';
+    updateStartButton();
+}
+
+function stopDetection() {
+    state.isDetecting = false;
+    if (state.animationFrameId) { cancelAnimationFrame(state.animationFrameId); state.animationFrameId = null; }
+    if (state.videoElement) { state.videoElement.pause(); state.videoElement = null; }
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    document.getElementById('progressBar').style.display = 'none';
+    updateStartButton();
+}
+
+function resetAll() {
+    stopDetection();
+    state.currentFile = null; state.currentFileName = '';
+    document.getElementById('imagePreview').src = '';
+    document.getElementById('uploadArea').classList.remove('has-file');
+    document.getElementById('imageInput').value = '';
+    document.getElementById('videoPreviewBox').style.display = 'none';
+    document.getElementById('videoPreview').src = '';
+    document.getElementById('videoUploadArea').classList.remove('has-file');
+    document.getElementById('videoInput').value = '';
+    const canvas = document.getElementById('outputCanvas');
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    canvas.style.display = 'none';
+    document.getElementById('outputPlaceholder').style.display = 'block';
+    document.getElementById('featureAnalysisBox').classList.add('hidden');
+    document.getElementById('statusDot').className = 'status-dot neutral';
+    document.getElementById('statusText').textContent = 'WAITING FOR INPUT';
+    document.getElementById('personsCount').textContent = '0';
+    document.getElementById('violationsCount').textContent = '0';
+    document.getElementById('safeCount').textContent = '0';
+    document.getElementById('totalDetections').textContent = '0';
+    document.getElementById('resultsArea').innerHTML = '<div class="empty-state"><i class="fas fa-clipboard"></i><p>No detections yet.</p></div>';
+    document.getElementById('progressFill').style.width = '0%';
+    updateStartButton();
+}
+
+// =========================================================
+// =========================================================
+//
+//   HARD HAT FEATURE DETECTION ENGINE
+//   Based on real construction hard hat visual features:
+//
+//   1. DOME SHAPE — curved convex top
+//   2. BRIM LINE — sharp horizontal edge
+//   3. SMOOTH SURFACE — low texture variance
+//   4. UNIFORM COLOR — consistent hue/saturation
+//   5. SPECULAR HIGHLIGHTS — light reflections on plastic
+//   6. POSITION — top of head, above forehead
+//   7. SIZE RATIO — dome = 25-35% of bounding box height
+//
+// =========================================================
+// =========================================================
+
+function rgbToHsv(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, v = max;
+    const d = max - min;
+    s = max === 0 ? 0 : d / max;
+    if (max === min) { h = 0; }
+    else {
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return { h: h * 360, s: s * 100, v: v * 100 };
+}
+
+/**
+ * FEATURE 1: DOME SHAPE DETECTION
+ * A hard hat has a convex dome shape.
+ * We check if the top region of the person's bounding box
+ * has a consistent, curved, filled area.
+ */
+function detectDomeShape(imageData, width, height) {
+    const data = imageData.data;
+    const rowBrightness = [];
+    const threshold = 40;
+
+    // Calculate average brightness per row
+    for (let y = 0; y < height; y++) {
+        let totalBrightness = 0;
+        let pixelCount = 0;
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+            totalBrightness += brightness;
+            pixelCount++;
+        }
+        rowBrightness.push(pixelCount > 0 ? totalBrightness / pixelCount : 0);
+    }
+
+    // Check for dome: brightness should be relatively consistent
+    // (uniform surface) and form a filled area
+    let avgBrightness = rowBrightness.reduce((a, b) => a + b, 0) / rowBrightness.length;
+    let variance = 0;
+    rowBrightness.forEach(b => variance += (b - avgBrightness) ** 2);
+    variance /= rowBrightness.length;
+
+    // Low variance = smooth dome shape
+    const domeScore = Math.max(0, 1 - (variance / 2000));
+    return domeScore;
+}
+
+/**
+ * FEATURE 2: BRIM LINE DETECTION
+ * The brim creates a sharp horizontal edge where the helmet meets the head.
+ * We scan for rows with sudden brightness/color changes.
+ */
+function detectBrimLine(imageData, width, height) {
+    const data = imageData.data;
+    const rowContrast = [];
+
+    for (let y = 1; y < height; y++) {
+        let contrast = 0;
+        let samples = 0;
+        for (let x = 0; x < width; x++) {
+            const idx1 = ((y - 1) * width + x) * 4;
+            const idx2 = (y * width + x) * 4;
+            const diff = Math.abs(data[idx1] - data[idx2]) +
+                         Math.abs(data[idx1 + 1] - data[idx2 + 1]) +
+                         Math.abs(data[idx1 + 2] - data[idx2 + 2]);
+            contrast += diff;
+            samples++;
+        }
+        rowContrast.push(samples > 0 ? contrast / samples : 0);
+    }
+
+    // Look for a sharp spike in the lower 40% of the region (brim area)
+    const searchStart = Math.floor(height * 0.5);
+    let maxContrast = 0;
+    let maxContrastRow = 0;
+
+    for (let y = searchStart; y < height; y++) {
+        if (rowContrast[y] > maxContrast) {
+            maxContrast = rowContrast[y];
+            maxContrastRow = y;
         }
     }
-    // Check if edge forms a curved arch (dome shape, not flat hair/head)
-    let curveMatches = 0;
-    const midX = Math.floor(hatZoneW/2);
-    const midY = topEdgeY[midX] || hatZoneH/4;
-    for (let pxX = 0; pxX < hatZoneW; pxX++) {
-        if (topEdgeY[pxX] >= midY - 5 && topEdgeY[pxX] <= midY + (hatZoneH * 0.15)) curveMatches++;
-    }
-    if (curveMatches > hatZoneW * 0.6) hardHatScore += 1;
 
-    // Pass if score >= 2 (two or more hard hat features present, matches any hard hat color from your photo)
-    return hardHatScore >=2;
+    const avgContrast = rowContrast.reduce((a, b) => a + b, 0) / rowContrast.length;
+    const brimScore = avgContrast > 0 ? Math.min(1, maxContrast / (avgContrast * 2.5)) : 0;
+    return brimScore;
 }
 
-function playAlarm() {
-    const now = Date.now();
-    if (now - lastAlarmTime < 2500) return;
-    lastAlarmTime = now;
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = 'square';
-    osc.frequency.value = 750;
-    gain.gain.value = 0.3;
-    osc.start();
-    setTimeout(() => osc.frequency.value = 600, 150);
-    setTimeout(() => { osc.stop(); audioCtx.close(); }, 450);
+/**
+ * FEATURE 3: SURFACE SMOOTHNESS
+ * Hard hat = smooth plastic surface with LOW texture variance
+ * Hair/skin = rough texture with HIGH variance
+ */
+function detectSmoothness(imageData, width, height) {
+    const data = imageData.data;
+    let edgeCount = 0;
+    let totalPixels = 0;
+
+    // Sobel-like edge detection
+    for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+            const idx = (y * width + x) * 4;
+            const idxLeft = (y * width + (x - 1)) * 4;
+            const idxRight = (y * width + (x + 1)) * 4;
+            const idxUp = ((y - 1) * width + x) * 4;
+            const idxDown = ((y + 1) * width + x) * 4;
+
+            const gx = (data[idxRight] - data[idxLeft]);
+            const gy = (data[idxDown] - data[idxUp]);
+            const edgeMagnitude = Math.sqrt(gx * gx + gy * gy);
+
+            if (edgeMagnitude > 30) edgeCount++;
+            totalPixels++;
+        }
+    }
+
+    const edgeRatio = totalPixels > 0 ? edgeCount / totalPixels : 1;
+    // Low edge ratio = smooth surface = helmet
+    const smoothnessScore = Math.max(0, 1 - (edgeRatio * 5));
+    return smoothnessScore;
 }
 
-startBtn.addEventListener('click', async () => {
-    if (detectionRunning) return;
-    if (mediaPreview.classList.contains('hidden')) { alert("Upload media or enable webcam first"); return; }
-    if (!personModel) {
-        startBtn.disabled = true;
-        startBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading AI Model...`;
-        personModel = await cocoSsd.load({base: 'lite_mobilenet_v2'});
-        startBtn.disabled = false;
-        startBtn.innerHTML = `<i class="fas fa-play"></i> Start Detection`;
+/**
+ * FEATURE 4: COLOR UNIFORMITY
+ * Hard hats have very uniform, solid color.
+ * We measure color variance using standard deviation in HSV space.
+ */
+function detectColorUniformity(imageData, width, height) {
+    const data = imageData.data;
+    const hues = [];
+    const sats = [];
+    const vals = [];
+
+    for (let i = 0; i < data.length; i += 16) { // sample every 4th pixel
+        const hsv = rgbToHsv(data[i], data[i + 1], data[i + 2]);
+        if (hsv.v > 20 && hsv.s > 10) { // skip very dark or very desaturated pixels
+            hues.push(hsv.h);
+            sats.push(hsv.s);
+            vals.push(hsv.v);
+        }
     }
-    detectionRunning = true;
-    stopCheck.checked = false;
-    totalPersons = 0; totalViolations = 0;
-    resultsLog.innerHTML = '';
-    runDetectionLoop();
-});
 
-stopCheck.addEventListener('change', () => {
-    if (stopCheck.checked) {
-        detectionRunning = false;
-        clearTimeout(detectionLoop);
-        updateStatus('DETECTION STOPPED', 'gray');
+    if (hues.length < 10) return 0;
+
+    const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const stdDev = arr => {
+        const m = mean(arr);
+        return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
+    };
+
+    const hueStd = stdDev(hues);
+    const satStd = stdDev(sats);
+    const valStd = stdDev(vals);
+
+    // Low standard deviation = uniform color = helmet
+    const hueScore = Math.max(0, 1 - (hueStd / 50));
+    const satScore = Math.max(0, 1 - (satStd / 40));
+    const valScore = Math.max(0, 1 - (valStd / 30));
+
+    return (hueScore * 0.5 + satScore * 0.25 + valScore * 0.25);
+}
+
+/**
+ * FEATURE 5: SPECULAR HIGHLIGHTS
+ * Hard hat plastic reflects light → bright spots on dome
+ * Hair/skin doesn't create sharp specular reflections
+ */
+function detectSpecularHighlights(imageData, width, height) {
+    const data = imageData.data;
+    let brightPixels = 0;
+    let totalSampled = 0;
+
+    for (let i = 0; i < data.length; i += 12) {
+        const brightness = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+        if (brightness > 220) brightPixels++; // specular highlight
+        totalSampled++;
     }
-});
 
-async function runDetectionLoop() {
-    if (!detectionRunning || stopCheck.checked) return;
-    let activeMedia;
-    if (activeInputType === 'image') activeMedia = imagePreview;
-    if (activeInputType === 'video') activeMedia = videoPreview;
-    if (activeInputType === 'webcam') activeMedia = webcamPreview;
+    const highlightRatio = totalSampled > 0 ? brightPixels / totalSampled : 0;
+    // Hard hats typically have 2-15% specular highlights
+    const specScore = highlightRatio > 0.01 && highlightRatio < 0.25
+        ? Math.min(1, highlightRatio * 8)
+        : 0;
+    return specScore;
+}
 
-    annotationCanvas.width = activeMedia.videoWidth || activeMedia.naturalWidth;
-    annotationCanvas.height = activeMedia.videoHeight || activeMedia.naturalHeight;
-    ctx.clearRect(0,0, annotationCanvas.width, annotationCanvas.height);
+/**
+ * MASTER HELMET DETECTION
+ * Combines all 5 features with weighted scoring
+ */
+function analyzeHardHat(ctx, bbox, imgW, imgH) {
+    const [bx, by, bw, bh] = bbox;
 
-    const predictions = await personModel.detect(activeMedia, 30, 0.55);
-    let framePersons = 0, frameViolations =0;
+    // Head/helmet region: top 30% of bounding box, centered
+    const regionTop = Math.max(0, Math.floor(by));
+    const regionHeight = Math.min(Math.floor(bh * 0.30), imgH - regionTop);
+    const regionLeft = Math.max(0, Math.floor(bx + bw * 0.05));
+    const regionWidth = Math.min(Math.floor(bw * 0.90), imgW - regionLeft);
 
-    predictions.forEach(pred => {
+    if (regionWidth < 10 || regionHeight < 10) {
+        return { hasHelmet: false, score: 0, features: {} };
+    }
+
+    try {
+        const imageData = ctx.getImageData(regionLeft, regionTop, regionWidth, regionHeight);
+
+        // Run all 5 feature detectors
+        const domeScore = detectDomeShape(imageData, regionWidth, regionHeight);
+        const brimScore = detectBrimLine(imageData, regionWidth, regionHeight);
+        const smoothScore = detectSmoothness(imageData, regionWidth, regionHeight);
+        const colorScore = detectColorUniformity(imageData, regionWidth, regionHeight);
+        const specScore = detectSpecularHighlights(imageData, regionWidth, regionHeight);
+
+        // Weighted combination
+        // Smoothness and color uniformity are the strongest indicators
+        const totalScore =
+            domeScore * 0.15 +
+            brimScore * 0.15 +
+            smoothScore * 0.25 +
+            colorScore * 0.30 +
+            specScore * 0.15;
+
+        const hasHelmet = totalScore > 0.35;
+
+        // Determine helmet color if present
+        let helmetColor = null;
+        if (hasHelmet) {
+            helmetColor = getHelmetDominantColor(imageData, regionWidth, regionHeight);
+        }
+
+        return {
+            hasHelmet: hasHelmet,
+            score: totalScore,
+            helmetColor: helmetColor,
+            features: {
+                domeShape: { score: domeScore, found: domeScore > 0.3 },
+                brimLine: { score: brimScore, found: brimScore > 0.25 },
+                smoothSurface: { score: smoothScore, found: smoothScore > 0.3 },
+                uniformColor: { score: colorScore, found: colorScore > 0.3 },
+                specularHighlights: { score: specScore, found: specScore > 0.15 }
+            }
+        };
+
+    } catch (e) {
+        return { hasHelmet: false, score: 0, features: {} };
+    }
+}
+
+/**
+ * Get dominant helmet color from the analyzed region
+ */
+function getHelmetDominantColor(imageData, width, height) {
+    const data = imageData.data;
+    let colorCounts = {
+        yellow: 0, white: 0, orange: 0,
+        blue: 0, red: 0, green: 0, brown: 0
+    };
+
+    for (let i = 0; i < data.length; i += 20) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const hsv = rgbToHsv(r, g, b);
+
+        // Skip dark pixels
+        if (hsv.v < 25) continue;
+
+        // Yellow hard hat: high H (50-70), high S, high V
+        if (hsv.h >= 45 && hsv.h <= 70 && hsv.s > 50 && hsv.v > 60) colorCounts.yellow++;
+        // White: low S, high V
+        else if (hsv.s < 15 && hsv.v > 75) colorCounts.white++;
+        // Orange: H 10-35, high S
+        else if (hsv.h >= 10 && hsv.h <= 35 && hsv.s > 50 && hsv.v > 50) colorCounts.orange++;
+        // Blue: H 200-260, high S
+        else if (hsv.h >= 200 && hsv.h <= 260 && hsv.s > 30 && hsv.v > 30) colorCounts.blue++;
+        // Red: H 0-15 or 345-360, high S
+        else if ((hsv.h <= 15 || hsv.h >= 345) && hsv.s > 40 && hsv.v > 40) colorCounts.red++;
+        // Green: H 90-150, high S
+        else if (hsv.h >= 90 && hsv.h <= 150 && hsv.s > 30 && hsv.v > 30) colorCounts.green++;
+        // Brown: H 15-35, low-medium S, low-medium V
+        else if (hsv.h >= 15 && hsv.h <= 35 && hsv.s > 20 && hsv.v >= 20 && hsv.v <= 60) colorCounts.brown++;
+    }
+
+    const maxColor = Object.entries(colorCounts).reduce((a, b) => b[1] > a[1] ? b : a);
+    return maxColor[1] > 5 ? maxColor[0] : 'unknown';
+}
+
+// =============================================
+// ========== DRAW ANNOTATIONS ================
+// =============================================
+function drawAnnotations(ctx, results) {
+    results.forEach(r => {
+        const [bx, by, bw, bh] = r.bbox;
+        const isSafe = r.hasHelmet;
+        const color = isSafe ? '#22c55e' : '#ef4444';
+
+        // Bounding box
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(bx, by, bw, bh);
+
+        // Corner accents
+        ctx.fillStyle = color;
+        const c = Math.min(15, bw / 4, bh / 4);
+        ctx.beginPath(); ctx.moveTo(bx, by + c); ctx.lineTo(bx, by); ctx.lineTo(bx + c, by); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(bx + bw - c, by); ctx.lineTo(bx + bw, by); ctx.lineTo(bx + bw, by + c); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(bx, by + bh - c); ctx.lineTo(bx, by + bh); ctx.lineTo(bx + c, by + bh); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(bx + bw - c, by + bh); ctx.lineTo(bx + bw, by + bh); ctx.lineTo(bx + bw, by + bh - c); ctx.fill();
+
+        // Draw helmet region indicator (small dome shape above head)
+        if (isSafe) {
+            const helmetTop = Math.max(0, by - 5);
+            const helmetH = bh * 0.3;
+            const helmetCenterX = bx + bw / 2;
+            ctx.beginPath();
+            ctx.arc(helmetCenterX, helmetTop + helmetH / 2, helmetH / 2, Math.PI, 0);
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.2)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(34, 197, 94, 0.6)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+
+        // Label
+        let label;
+        if (isSafe) {
+            const colorText = r.helmetColor ? ` (${r.helmetColor})` : '';
+            label = `✓ HARD HAT${colorText} — SAFE`;
+        } else {
+            label = '✗ NO HARD HAT — UNSAFE';
+        }
+
+        const conf = Math.round(r.confidence * 100) + '%';
+        const featureConf = Math.round(r.helmetScore * 100) + '%';
+        ctx.font = 'bold 11px Arial';
+        const textW = ctx.measureText(label).width;
+
+        const labelY = by - 8;
+        ctx.fillStyle = color;
+        roundRect(ctx, bx, labelY - 24, textW + 20, 24, 4);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px Arial';
+        ctx.fillText(label, bx + 10, labelY - 8);
+
+        // Score beneath
+        ctx.fillStyle = color;
+        ctx.font = '10px Arial';
+        ctx.fillText(`Detection: ${conf} | Feature: ${featureConf}`, bx + 8, by + bh + 14);
+    });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// =============================================
+// ========== IMAGE DETECTION ==================
+// =============================================
+async function detectImage() {
+    const img = new Image();
+    img.src = URL.createObjectURL(state.currentFile);
+    await img.decode();
+
+    const canvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const maxW = 800, maxH = 600;
+    let w = img.width, h = img.height;
+    if (w > maxW) { h = h * maxW / w; w = maxW; }
+    if (h > maxH) { w = w * maxH / h; h = maxH; }
+    canvas.width = Math.round(w);
+    canvas.height = Math.round(h);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    document.getElementById('progressFill').style.width = '20%';
+
+    const predictions = await state.model.detect(canvas);
+    document.getElementById('progressFill').style.width = '50%';
+
+    const results = [];
+    let workerIndex = 0;
+
+    for (const pred of predictions) {
         if (pred.class === 'person') {
-            framePersons++;
-            const [x, y, w, h] = pred.bbox;
-            const wearingHelmet = isHardHatWorn(activeMedia, pred.bbox);
-
-            ctx.lineWidth = 4;
-            ctx.font = 'bold 18px sans-serif';
-            if (wearingHelmet) {
-                // Safe: any color hard hat detected from shape features
-                ctx.strokeStyle = '#16a34a';
-                ctx.fillStyle = '#16a34a';
-                ctx.fillRect(x, y-32, 270, 32);
-                ctx.fillStyle = 'white';
-                ctx.fillText(`✅ SAFE: Hard Hat Detected`, x+5, y-9);
-                addLogEntry("Worker detected", "Compliant: Hard hat worn", "safe");
-            } else {
-                // Unsafe: no hard hat shape found, trigger alarm
-                frameViolations++;
-                ctx.strokeStyle = '#dc2626';
-                ctx.fillStyle = '#dc2626';
-                ctx.fillRect(x, y-32, 280, 32);
-                ctx.fillStyle = 'white';
-                ctx.fillText(`⚠️ UNSAFE: No Hard Hat!`, x+5, y-9);
-                addLogEntry("Worker detected", "VIOLATION: Missing hard hat", "danger");
-                playAlarm();
-            }
-            ctx.strokeRect(x, y, w, h);
+            workerIndex++;
+            const helmetResult = analyzeHardHat(ctx, pred.bbox, canvas.width, canvas.height);
+            results.push({
+                class: 'worker',
+                workerId: workerIndex,
+                confidence: pred.score,
+                bbox: pred.bbox,
+                hasHelmet: helmetResult.hasHelmet,
+                helmetScore: helmetResult.score,
+                helmetColor: helmetResult.helmetColor,
+                features: helmetResult.features,
+                isPerson: true
+            });
+        } else {
+            results.push({
+                class: pred.class,
+                confidence: pred.score,
+                bbox: pred.bbox,
+                hasHelmet: false,
+                helmetScore: 0,
+                helmetColor: null,
+                features: {},
+                isPerson: false
+            });
         }
+    }
+
+    document.getElementById('progressFill').style.width = '80%';
+
+    // Re-draw and annotate
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    drawAnnotations(ctx, results.filter(r => r.isPerson));
+
+    document.getElementById('progressFill').style.width = '100%';
+
+    showOutput(canvas);
+    updateStats(results);
+    showResults(results);
+    showFeatureAnalysis(results.filter(r => r.isPerson));
+
+    if (results.some(r => r.isPerson && !r.hasHelmet)) playAlarm();
+
+    saveToHistory(results);
+}
+
+// =============================================
+// ========== VIDEO DETECTION ==================
+// =============================================
+async function detectVideo() {
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(state.currentFile);
+    video.muted = true;
+    state.videoElement = video;
+    await new Promise(resolve => { video.onloadedmetadata = resolve; });
+
+    const canvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+    const totalFrames = Math.floor(video.duration * 5);
+    let currentFrame = 0;
+
+    const maxW = 640;
+    let w = video.videoWidth, h = video.videoHeight;
+    if (w > maxW) { h = h * maxW / w; w = maxW; }
+    canvas.width = Math.round(w); canvas.height = Math.round(h);
+
+    video.currentTime = 0;
+    await video.play(); video.pause();
+
+    const allResults = [];
+
+    async function processNextFrame() {
+        if (!state.isDetecting || currentFrame >= totalFrames) {
+            state.isDetecting = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('progressBar').style.display = 'none';
+            updateStats(allResults);
+            showResults(allResults);
+            if (allResults.some(r => r.isPerson && !r.hasHelmet)) playAlarm();
+            saveToHistory(allResults);
+            return;
+        }
+
+        video.currentTime = currentFrame / 5;
+        await new Promise(resolve => { video.onseeked = resolve; });
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const predictions = await state.model.detect(canvas);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        let wi = allResults.filter(r => r.isPerson).length;
+        predictions.forEach(pred => {
+            if (pred.class === 'person') {
+                wi++;
+                const hr = analyzeHardHat(ctx, pred.bbox, canvas.width, canvas.height);
+                allResults.push({
+                    class: 'worker', workerId: wi, confidence: pred.score,
+                    bbox: pred.bbox, hasHelmet: hr.hasHelmet, helmetScore: hr.score,
+                    helmetColor: hr.helmetColor, features: hr.features, isPerson: true
+                });
+            }
+        });
+
+        drawAnnotations(ctx, allResults.filter(r => r.isPerson));
+        document.getElementById('progressFill').style.width = Math.round((currentFrame / totalFrames) * 100) + '%';
+        currentFrame++;
+        showOutput(canvas); updateStats(allResults);
+        setTimeout(processNextFrame, 100);
+    }
+
+    showOutput(canvas); processNextFrame();
+}
+
+// =============================================
+// ========== WEBCAM DETECTION =================
+// =============================================
+function detectWebcamLoop() {
+    const camVideo = document.getElementById('webcamPreviewVideo');
+    const canvas = document.getElementById('outputCanvas');
+    const ctx = canvas.getContext('2d');
+
+    if (camVideo.videoWidth === 0) {
+        if (state.isDetecting) state.animationFrameId = requestAnimationFrame(detectWebcamLoop);
+        return;
+    }
+
+    const maxW = 640;
+    let w = camVideo.videoWidth, h = camVideo.videoHeight;
+    if (w > maxW) { h = h * maxW / w; w = maxW; }
+    if (canvas.width !== Math.round(w)) { canvas.width = Math.round(w); canvas.height = Math.round(h); }
+
+    ctx.drawImage(camVideo, 0, 0, canvas.width, canvas.height);
+
+    state.model.detect(canvas).then(predictions => {
+        ctx.drawImage(camVideo, 0, 0, canvas.width, canvas.height);
+        const results = [];
+        let wi = 0;
+
+        predictions.forEach(pred => {
+            if (pred.class === 'person') {
+                wi++;
+                const hr = analyzeHardHat(ctx, pred.bbox, canvas.width, canvas.height);
+                results.push({
+                    class: 'worker', workerId: wi, confidence: pred.score,
+                    bbox: pred.bbox, hasHelmet: hr.hasHelmet, helmetScore: hr.score,
+                    helmetColor: hr.helmetColor, features: hr.features, isPerson: true
+                });
+            }
+        });
+
+        drawAnnotations(ctx, results);
+        updateStats(results);
+        showResults(results);
+        showFeatureAnalysis(results);
+        if (results.some(r => !r.hasHelmet)) playAlarm();
+        showOutput(canvas);
+        if (state.isDetecting) state.animationFrameId = requestAnimationFrame(detectWebcamLoop);
+    }).catch(err => {
+        console.error(err);
+        if (state.isDetecting) state.animationFrameId = requestAnimationFrame(detectWebcamLoop);
+    });
+}
+
+// =============================================
+// ========== UI HELPERS =======================
+// =============================================
+function showOutput(canvas) {
+    document.getElementById('outputPlaceholder').style.display = 'none';
+    canvas.style.display = 'block';
+}
+
+function updateStats(results) {
+    const persons = results.filter(r => r.isPerson);
+    const safe = persons.filter(r => r.hasHelmet);
+    const unsafe = persons.filter(r => !r.hasHelmet);
+
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+
+    if (persons.length === 0) {
+        dot.className = 'status-dot neutral';
+        text.textContent = 'NO WORKERS DETECTED';
+    } else if (unsafe.length === 0) {
+        dot.className = 'status-dot safe';
+        text.textContent = 'SITE SAFE ✓ — All workers wearing hard hats';
+    } else {
+        dot.className = 'status-dot unsafe';
+        text.textContent = `UNSAFE ⚠ ${unsafe.length} worker(s) WITHOUT hard hat`;
+    }
+
+    document.getElementById('personsCount').textContent = persons.length;
+    document.getElementById('safeCount').textContent = safe.length;
+    document.getElementById('violationsCount').textContent = unsafe.length;
+    document.getElementById('totalDetections').textContent = results.length;
+}
+
+function showResults(results) {
+    const area = document.getElementById('resultsArea');
+    const persons = results.filter(r => r.isPerson);
+    const objects = results.filter(r => !r.isPerson);
+
+    if (persons.length === 0 && objects.length === 0) {
+        area.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><p>No detections found.</p></div>';
+        return;
+    }
+
+    let html = `<table class="results-table"><thead><tr><th>#</th><th>Detection</th><th>AI Confidence</th><th>Hard Hat Feature</th><th>Status</th></tr></thead><tbody>`;
+
+    persons.forEach(r => {
+        const helmetBadge = r.hasHelmet
+            ? `<span class="badge badge-helmet">Hard Hat ✓ ${r.helmetColor ? '(' + r.helmetColor + ')' : ''}</span>`
+            : `<span class="badge badge-unsafe">No Hard Hat</span>`;
+        const statusBadge = r.hasHelmet
+            ? '<span class="badge badge-safe">✓ SAFE</span>'
+            : '<span class="badge badge-unsafe">✗ UNSAFE — ALARM</span>';
+        const featureScore = Math.round(r.helmetScore * 100) + '%';
+        html += `<tr>
+            <td>${r.workerId}</td>
+            <td>Worker (Person)</td>
+            <td>${Math.round(r.confidence * 100)}%</td>
+            <td>${helmetBadge} <span class="badge badge-features">Feature: ${featureScore}</span></td>
+            <td>${statusBadge}</td>
+        </tr>`;
     });
 
-    totalPersons = Math.max(totalPersons, framePersons);
-    totalViolations = Math.max(totalViolations, frameViolations);
-    personCount.textContent = totalPersons;
-    violationCount.textContent = totalViolations;
+    objects.forEach(r => {
+        html += `<tr><td>-</td><td style="text-transform:capitalize;">${r.class}</td><td>${Math.round(r.confidence * 100)}%</td><td>-</td><td><span class="badge badge-safe">Object</span></td></tr>`;
+    });
 
-    if (frameViolations > 0) updateStatus("UNSAFE: Missing Helmets", "danger");
-    else if (framePersons > 0) updateStatus("SITE SAFE: All Helmets Worn", "safe");
-    else updateStatus("No Workers Detected", "gray");
-
-    if (activeInputType !== 'image') detectionLoop = setTimeout(runDetectionLoop, 120);
-    else detectionRunning = false;
+    html += '</tbody></table>';
+    area.innerHTML = html;
 }
 
-function updateStatus(text, color) {
-    const colorMap = {safe: 'text-safe', danger: 'text-danger', gray: 'text-gray-500'}
-    const iconMap = {safe: 'fa-check-circle text-safe', danger: 'fa-exclamation-triangle text-danger', gray: 'fa-circle text-gray-400'}
-    siteStatus.className = `flex items-center gap-2 font-semibold ${colorMap[color]}`;
-    siteStatus.innerHTML = `<i class="fas ${iconMap[color]}"></i> ${text}`;
+function showFeatureAnalysis(workers) {
+    const box = document.getElementById('featureAnalysisBox');
+    const content = document.getElementById('featureAnalysisContent');
+
+    if (workers.length === 0) {
+        box.classList.add('hidden');
+        return;
+    }
+
+    box.classList.remove('hidden');
+    let html = '';
+
+    workers.forEach(w => {
+        const statusColor = w.hasHelmet ? '#22c55e' : '#ef4444';
+        const statusText = w.hasHelmet ? 'HARD HAT DETECTED' : 'NO HARD HAT DETECTED';
+
+        html += `<div style="margin-bottom:10px;padding:8px;background:#fff;border-radius:6px;border-left:4px solid ${statusColor};">
+            <div style="font-weight:700;font-size:12px;color:${statusColor};margin-bottom:6px;">
+                Worker #${w.workerId}: ${statusText} (Score: ${Math.round(w.helmetScore * 100)}%)
+                ${w.helmetColor ? `<span style="margin-left:8px;background:#e0e7ff;color:#3730a3;padding:1px 6px;border-radius:4px;font-size:10px;">${w.helmetColor}</span>` : ''}
+            </div>`;
+
+        if (w.features) {
+            html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+
+            const featureNames = {
+                domeShape: 'Dome Shape',
+                brimLine: 'Brim Line',
+                smoothSurface: 'Smooth Surface',
+                uniformColor: 'Uniform Color',
+                specularHighlights: 'Light Reflection'
+            };
+
+            for (const [key, label] of Object.entries(featureNames)) {
+                const f = w.features[key];
+                if (f) {
+                    const tagClass = f.found ? 'feature-tag found' : 'feature-tag missing';
+                    const icon = f.found ? '✓' : '✗';
+                    html += `<span class="${tagClass}">${icon} ${label} (${Math.round(f.score * 100)}%)</span>`;
+                }
+            }
+
+            html += '</div>';
+        }
+
+        html += '</div>';
+    });
+
+    content.innerHTML = html;
 }
 
-function addLogEntry(section, message, type) {
-    const time = new Date().toLocaleTimeString();
-    const colorClass = type === 'safe' ? 'text-safe' : 'text-danger';
-    const entry = document.createElement('div');
-    entry.className = `py-1 border-b border-gray-200 ${colorClass}`;
-    entry.innerHTML = `<span class="text-gray-500">${time}</span> | ${section} | <strong>${message}</strong>`;
-    resultsLog.prepend(entry);
+// =============================================
+// ========== ALARM ============================
+// =============================================
+function playAlarm() {
+    try {
+        const overlay = document.getElementById('alarmOverlay');
+        overlay.style.display = 'block';
+        setTimeout(() => { overlay.style.display = 'none'; }, 3500);
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let count = 0;
+        const beep = () => {
+            if (count >= 10) { audioCtx.close(); return; }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.value = count % 2 === 0 ? 880 : 660;
+            osc.type = 'square';
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.15);
+            count++;
+            setTimeout(beep, 200);
+        };
+        beep();
+    } catch (e) { console.log('Alarm not available:', e); }
 }
 
-resetBtn.addEventListener('click', resetAll);
-function resetPreview() {
-    if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
-    imagePreview.classList.add('hidden');
-    videoPreview.classList.add('hidden');
-    webcamPreview.classList.add('hidden');
-    mediaPreview.classList.add('hidden');
-    outputPlaceholder.classList.remove('hidden');
-    imagePreview.src = ''; videoPreview.src = '';
-    startWebcamBtn.disabled = false;
-    startWebcamBtn.innerHTML = `<i class="fas fa-camera mr-2"></i> Enable Live Webcam`;
-    ctx.clearRect(0,0,annotationCanvas.width, annotationCanvas.height);
+// =============================================
+// ========== HISTORY ==========================
+// =============================================
+function saveToHistory(results) {
+    const persons = results.filter(r => r.isPerson);
+    const violations = persons.filter(r => !r.hasHelmet);
+    const safe = persons.filter(r => r.hasHelmet);
+
+    state.history.unshift({
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        inputType: state.inputType,
+        fileName: state.currentFileName || 'Webcam',
+        safetyStatus: violations.length === 0 ? 'SAFE' : 'UNSAFE',
+        totalPersons: persons.length,
+        safeWorkers: safe.length,
+        totalViolations: violations.length,
+        totalDetections: results.length
+    });
+
+    if (state.history.length > 200) state.history = state.history.slice(0, 200);
+    localStorage.setItem('safetyHistory', JSON.stringify(state.history));
 }
-function resetAll() {
-    detectionRunning = false;
-    clearTimeout(detectionLoop);
-    stopCheck.checked = false;
-    totalPersons = 0; totalViolations = 0;
-    personCount.textContent = 0; violationCount.textContent = 0;
-    resetPreview();
-    updateStatus("IDLE", "gray");
-    resultsLog.innerHTML = `<p class="text-gray-400 text-center mt-16">Run detection to see results</p>`;
-    fileInput.value = '';
+
+function renderHistory() {
+    const sf = document.getElementById('filterStatus').value;
+    const tf = document.getElementById('filterType').value;
+    let data = [...state.history];
+    if (sf !== 'all') data = data.filter(d => d.safetyStatus === sf);
+    if (tf !== 'all') data = data.filter(d => d.inputType === tf);
+
+    const area = document.getElementById('historyTable');
+    if (data.length === 0) { area.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No history found.</p></div>'; return; }
+
+    let html = `<table class="results-table"><thead><tr><th>Time</th><th>Type</th><th>File</th><th>Status</th><th>Workers</th><th>With Hat</th><th>No Hat</th></tr></thead><tbody>`;
+    data.forEach(d => {
+        html += `<tr><td>${new Date(d.timestamp).toLocaleString()}</td><td>${d.inputType}</td><td>${d.fileName}</td>
+            <td>${d.safetyStatus === 'SAFE' ? '<span class="badge badge-safe">SAFE</span>' : '<span class="badge badge-unsafe">UNSAFE</span>'}</td>
+            <td>${d.totalPersons}</td><td>${d.safeWorkers || 0}</td><td>${d.totalViolations}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    area.innerHTML = html;
 }
+
+function clearHistory() {
+    if (confirm('Delete all history?')) { state.history = []; localStorage.removeItem('safetyHistory'); renderHistory(); renderStatistics(); }
+}
+
+function exportCSV() {
+    if (state.history.length === 0) return alert('No data.');
+    let csv = 'Timestamp,Type,File,Status,Workers,With Hat,No Hat\n';
+    state.history.forEach(d => { csv += `"${d.timestamp}","${d.inputType}","${d.fileName}","${d.safetyStatus}",${d.totalPersons},${d.safeWorkers||0},${d.totalViolations}\n`; });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'safety_history.csv'; a.click();
+}
+
+// =============================================
+// ========== STATISTICS ========================
+// =============================================
+function renderStatistics() {
+    const data = state.history;
+    const total = data.length;
+    const safe = data.filter(d => d.safetyStatus === 'SAFE').length;
+    const unsafe = total - safe;
+    const tv = data.reduce((s, d) => s + d.totalViolations, 0);
+    const avg = total > 0 ? (tv / total).toFixed(1) : '0';
+
+    document.getElementById('metricsContainer').innerHTML = `
+        <div class="metric-cards">
+            <div class="metric-card"><div class="value">${total}</div><div class="label">Total Scans</div></div>
+            <div class="metric-card"><div class="value" style="color:#22c55e">${safe}</div><div class="label">Safe Scans</div></div>
+            <div class="metric-card"><div class="value" style="color:#ef4444">${unsafe}</div><div class="label">Unsafe Scans</div></div>
+            <div class="metric-card"><div class="value" style="color:#f59e0b">${tv}</div><div class="label">No-Hat Violations</div></div>
+            <div class="metric-card"><div class="value">${avg}</div><div class="label">Avg Violations/Scan</div></div>
+        </div>`;
+
+    const maxBar = Math.max(safe, unsafe, 1);
+    document.getElementById('safeUnsafeChart').innerHTML = `<div class="bar-chart">
+        <div class="bar-col"><div class="bar-value">${safe}</div><div class="bar" style="height:${(safe/maxBar)*140}px;background:#22c55e;"></div><div class="bar-label">Safe</div></div>
+        <div class="bar-col"><div class="bar-value">${unsafe}</div><div class="bar" style="height:${(unsafe/maxBar)*140}px;background:#ef4444;"></div><div class="bar-label">Unsafe</div></div>
+    </div>`;
+
+    const img = data.filter(d => d.inputType === 'Image').length;
+    const vid = data.filter(d => d.inputType === 'Video').length;
+    const cam = data.filter(d => d.inputType === 'Webcam').length;
+    const maxType = Math.max(img, vid, cam, 1);
+    document.getElementById('inputTypeChart').innerHTML = `<div class="bar-chart">
+        <div class="bar-col"><div class="bar-value">${img}</div><div class="bar" style="height:${(img/maxType)*140}px;background:#4285f4;"></div><div class="bar-label">Image</div></div>
+        <div class="bar-col"><div class="bar-value">${vid}</div><div class="bar" style="height:${(vid/maxType)*140}px;background:#34a853;"></div><div class="bar-label">Video</div></div>
+        <div class="bar-col"><div class="bar-value">${cam}</div><div class="bar" style="height:${(cam/maxType)*140}px;background:#fbbc04;"></div><div class="bar-label">Webcam</div></div>
+    </div>`;
+
+    const recent = data.slice(0, 10).reverse();
+    if (recent.length === 0) { document.getElementById('activityChart').innerHTML = '<div class="empty-state"><p>No activity yet.</p></div>'; return; }
+    const maxAct = Math.max(...recent.map(d => d.totalViolations), 1);
+    let actBars = '';
+    recent.forEach(d => {
+        const time = new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const color = d.safetyStatus === 'SAFE' ? '#22c55e' : '#ef4444';
+        const h = Math.max((d.totalViolations / maxAct) * 140, 4);
+        actBars += `<div class="bar-col"><div class="bar-value">${d.totalViolations}</div><div class="bar" style="height:${h}px;background:${color};"></div><div class="bar-label">${time}</div></div>`;
+    });
+    document.getElementById('activityChart').innerHTML = `<div class="bar-chart">${actBars}</div>`;
+}
+
+// =============================================
+// ========== BOOT =============================
+// =============================================
+initModel();
 </script>
 </body>
 </html>
