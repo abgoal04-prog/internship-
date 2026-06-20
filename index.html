@@ -1,174 +1,528 @@
-/* Custom CSS for Construction Site Safety Monitor */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Site Safety Monitor</title>
+    <!-- Load UI dependencies from CDN (no local files needed) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Load AI detection libraries (client-side, runs entirely in browser) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 
-/* Rounded cards and containers */
-.stApp {
-    background-color: #f8f9fa;
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        safe: '#16a34a',
+                        danger: '#dc2626',
+                        neutral: '#f3f4f6',
+                        labelBg: '#dbeafe'
+                    },
+                    fontFamily: {
+                        sans: ['Segoe UI', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Exact label styling matching your screenshot */
+        .section-label {
+            @apply bg-labelBg text-primary font-medium px-3 py-1 rounded-md inline-block mb-3 text-sm;
+        }
+        .tab-active {
+            @apply bg-primary text-white;
+        }
+        .tab-inactive {
+            @apply bg-neutral text-gray-600 hover:bg-gray-200;
+        }
+        .dropzone {
+            @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors;
+        }
+        /* Make canvas align perfectly over media for bounding boxes */
+        .media-container {
+            position: relative;
+        }
+        #annotationCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-800 min-h-screen p-6">
+    <!-- App Container -->
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-xl font-semibold mb-6 flex items-center gap-2">
+            <i class="fas fa-hard-hat text-primary"></i>
+            Construction Site Safety Monitor
+        </h1>
+
+        <!-- Two Column Layout Exact Match To Your Screenshot -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- LEFT COLUMN: Input Controls -->
+            <div>
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <i class="fas fa-sliders"></i> Input Controls
+                </h2>
+
+                <!-- Input Type Selector -->
+                <div class="mb-6">
+                    <div class="section-label flex items-center gap-2">
+                        <i class="fas fa-mouse-pointer"></i> Select Input Type
+                    </div>
+                    <div class="flex gap-2 mb-5">
+                        <button id="tabImage" class="tab-active px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2">
+                            <i class="fas fa-image"></i> Image
+                        </button>
+                        <button id="tabVideo" class="tab-inactive px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2">
+                            <i class="fas fa-video"></i> Video
+                        </button>
+                        <button id="tabWebcam" class="tab-inactive px-6 py-2 rounded-md font-medium transition-colors flex items-center gap-2">
+                            <i class="fas fa-webcam"></i> Webcam
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upload / Input Area -->
+                <div class="mb-6">
+                    <div class="section-label flex items-center gap-2" id="uploadLabel">
+                        <i class="fas fa-upload"></i> Upload Image
+                    </div>
+
+                    <!-- Dropzone for files -->
+                    <div id="dropzone" class="dropzone mb-4">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-500 mb-1" id="dropText">Drop Image Here</p>
+                        <p class="text-gray-400 text-sm">- or -</p>
+                        <p class="text-gray-500 mt-1" id="clickText">Click to Upload</p>
+                        <input type="file" id="fileInput" class="hidden" accept="image/*">
+                    </div>
+
+                    <!-- Webcam activation button (hidden by default) -->
+                    <div id="webcamControl" class="hidden mb-4">
+                        <button id="startWebcamBtn" class="w-full bg-primary text-white py-3 rounded-md font-medium hover:bg-primary/90 transition-colors">
+                            <i class="fas fa-camera mr-2"></i> Enable Live Webcam
+                        </button>
+                    </div>
+
+                    <!-- Media Preview Area -->
+                    <div class="media-container hidden rounded-lg overflow-hidden border border-gray-200 mb-4" id="mediaPreview">
+                        <img id="imagePreview" class="w-full hidden" />
+                        <video id="videoPreview" class="w-full hidden" controls></video>
+                        <video id="webcamPreview" class="w-full hidden" autoplay muted></video>
+                        <canvas id="annotationCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Control Buttons -->
+                <div class="flex flex-wrap items-center gap-6 mb-6 justify-center">
+                    <button id="startBtn" class="bg-primary text-white px-8 py-2.5 rounded-md font-semibold hover:bg-primary/90 transition-colors flex items-center gap-2">
+                        <i class="fas fa-play"></i> Start Detection
+                    </button>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" id="stopCheck" class="w-4 h-4">
+                        <span class="font-medium">Stop Detection</span>
+                    </label>
+                </div>
+                <div class="text-center mb-8">
+                    <button id="resetBtn" class="font-medium flex items-center gap-2 mx-auto hover:text-primary transition-colors">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+
+                <!-- Dashboard Statistics -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-chart-bar"></i> Dashboard Statistics
+                    </h3>
+                    <div class="section-label">Statistics</div>
+                    <div class="mt-4 space-y-3">
+                        <div class="flex items-center justify-between p-3 bg-neutral rounded-md">
+                            <span>Site Status:</span>
+                            <span id="siteStatus" class="flex items-center gap-2 font-semibold text-gray-500">
+                                <i class="fas fa-circle text-gray-400"></i> IDLE
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-neutral rounded-md">
+                            <span>Persons Detected:</span>
+                            <span id="personCount" class="font-semibold">0</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-neutral rounded-md">
+                            <span>Violations Detected:</span>
+                            <span id="violationCount" class="font-semibold">0</span>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex items-center gap-2 text-sm text-gray-500">
+                        <i class="fas fa-circle text-safe"></i> SITE SAFE
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Detection Output -->
+            <div>
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <i class="fas fa-search"></i> Detection Output
+                </h2>
+
+                <div class="section-label flex items-center gap-2 mb-3">
+                    <i class="fas fa-image"></i> Annotated Output
+                </div>
+
+                <!-- Empty Annotated Output placeholder (matches your screenshot) -->
+                <div id="outputPlaceholder" class="w-full h-[350px] border border-gray-200 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 mb-6">
+                    <i class="fas fa-expand text-xl"></i>
+                </div>
+
+                <div class="section-label flex items-center gap-2 mb-3">
+                    <i class="fas fa-file-alt"></i> Detection Results
+                </div>
+                <div id="resultsLog" class="w-full h-[200px] border border-gray-200 rounded-lg p-3 overflow-y-auto bg-gray-50 text-sm">
+                    <p class="text-gray-400 text-center mt-16">Run detection to see results</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ==============================================
+// APP STATE & FUNCTIONALITY
+// ==============================================
+let activeInputType = 'image';
+let detectionRunning = false;
+let personModel = null;
+let lastAlarmTime = 0;
+let webcamStream = null;
+let detectionLoop = null;
+let totalPersons = 0;
+let totalViolations = 0;
+
+// DOM Elements
+const tabImage = document.getElementById('tabImage');
+const tabVideo = document.getElementById('tabVideo');
+const tabWebcam = document.getElementById('tabWebcam');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const uploadLabel = document.getElementById('uploadLabel');
+const dropText = document.getElementById('dropText');
+const clickText = document.getElementById('clickText');
+const webcamControl = document.getElementById('webcamControl');
+const mediaPreview = document.getElementById('mediaPreview');
+const imagePreview = document.getElementById('imagePreview');
+const videoPreview = document.getElementById('videoPreview');
+const webcamPreview = document.getElementById('webcamPreview');
+const annotationCanvas = document.getElementById('annotationCanvas');
+const outputPlaceholder = document.getElementById('outputPlaceholder');
+const startBtn = document.getElementById('startBtn');
+const stopCheck = document.getElementById('stopCheck');
+const resetBtn = document.getElementById('resetBtn');
+const siteStatus = document.getElementById('siteStatus');
+const personCount = document.getElementById('personCount');
+const violationCount = document.getElementById('violationCount');
+const resultsLog = document.getElementById('resultsLog');
+const startWebcamBtn = document.getElementById('startWebcamBtn');
+const ctx = annotationCanvas.getContext('2d');
+
+// ==============================================
+// Tab Switching Logic
+// ==============================================
+function setActiveTab(type) {
+    activeInputType = type;
+    resetAll();
+
+    // Reset tab styles
+    [tabImage, tabVideo, tabWebcam].forEach(tab => {
+        tab.classList.remove('tab-active');
+        tab.classList.add('tab-inactive');
+    });
+
+    if (type === 'image') {
+        tabImage.classList.add('tab-active');
+        tabImage.classList.remove('tab-inactive');
+        uploadLabel.innerHTML = `<i class="fas fa-upload"></i> Upload Image`;
+        dropText.textContent = "Drop Image Here";
+        clickText.textContent = "Click to Upload";
+        fileInput.accept = "image/*";
+        dropzone.classList.remove('hidden');
+        webcamControl.classList.add('hidden');
+    } else if (type === 'video') {
+        tabVideo.classList.add('tab-active');
+        tabVideo.classList.remove('tab-inactive');
+        uploadLabel.innerHTML = `<i class="fas fa-upload"></i> Upload Video`;
+        dropText.textContent = "Drop Video Here";
+        clickText.textContent = "Click to Upload";
+        fileInput.accept = "video/*";
+        dropzone.classList.remove('hidden');
+        webcamControl.classList.add('hidden');
+    } else if (type === 'webcam') {
+        tabWebcam.classList.add('tab-active');
+        tabWebcam.classList.remove('tab-inactive');
+        dropzone.classList.add('hidden');
+        webcamControl.classList.remove('hidden');
+    }
+}
+tabImage.addEventListener('click', () => setActiveTab('image'));
+tabVideo.addEventListener('click', () => setActiveTab('video'));
+tabWebcam.addEventListener('click', () => setActiveTab('webcam'));
+
+// ==============================================
+// File Upload Logic
+// ==============================================
+dropzone.addEventListener('click', () => fileInput.click());
+// Drag and drop
+dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.classList.add('border-primary');
+});
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-primary'));
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('border-primary');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+    resetPreview();
+    const fileURL = URL.createObjectURL(file);
+    if (activeInputType === 'image' && file.type.startsWith('image/')) {
+        imagePreview.src = fileURL;
+        imagePreview.classList.remove('hidden');
+        mediaPreview.classList.remove('hidden');
+        outputPlaceholder.classList.add('hidden');
+    } else if (activeInputType === 'video' && file.type.startsWith('video/')) {
+        videoPreview.src = fileURL;
+        videoPreview.classList.remove('hidden');
+        mediaPreview.classList.remove('hidden');
+        outputPlaceholder.classList.add('hidden');
+    }
 }
 
-/* Primary button styling */
-.stButton > button[kind="primary"] {
-    background-color: #0066cc;
-    color: white;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    border: none;
-    transition: all 0.2s ease;
+// ==============================================
+// Webcam Logic
+// ==============================================
+startWebcamBtn.addEventListener('click', async () => {
+    try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({video: true});
+        webcamPreview.srcObject = webcamStream;
+        webcamPreview.classList.remove('hidden');
+        mediaPreview.classList.remove('hidden');
+        outputPlaceholder.classList.add('hidden');
+        startWebcamBtn.textContent = "Webcam Active";
+        startWebcamBtn.disabled = true;
+    } catch (err) {
+        alert("Could not access webcam. Please allow camera permissions.");
+    }
+});
+
+// ==============================================
+// Alarm Sound (built-in, no external audio file needed)
+// ==============================================
+function playAlarm() {
+    const now = Date.now();
+    if (now - lastAlarmTime < 2000) return; // Cooldown to avoid constant beeping
+    lastAlarmTime = now;
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    oscillator.connect(gain);
+    gain.connect(audioCtx.destination);
+    oscillator.type = 'square';
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.3;
+    oscillator.start();
+    setTimeout(() => {
+        oscillator.stop();
+        audioCtx.close();
+    }, 300);
 }
 
-.stButton > button[kind="primary"]:hover {
-    background-color: #0052a3;
-    transform: translateY(-1px);
+// ==============================================
+// Detection Logic
+// ==============================================
+startBtn.addEventListener('click', async () => {
+    if (detectionRunning) return;
+    if (mediaPreview.classList.contains('hidden')) {
+        alert("Please upload an image/video, or enable webcam first!");
+        return;
+    }
+
+    // Load AI model on first run
+    if (!personModel) {
+        startBtn.disabled = true;
+        startBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading AI Model...`;
+        personModel = await cocoSsd.load({base: 'lite_mobilenet_v2'});
+        startBtn.disabled = false;
+        startBtn.innerHTML = `<i class="fas fa-play"></i> Start Detection`;
+    }
+
+    detectionRunning = true;
+    stopCheck.checked = false;
+    totalPersons = 0;
+    totalViolations = 0;
+    resultsLog.innerHTML = '';
+    runDetectionLoop();
+});
+
+stopCheck.addEventListener('change', () => {
+    if (stopCheck.checked) {
+        detectionRunning = false;
+        clearTimeout(detectionLoop);
+        updateStatus('IDLE', 'gray');
+    }
+});
+
+async function runDetectionLoop() {
+    if (!detectionRunning || stopCheck.checked) return;
+
+    // Get active media source
+    let activeMedia;
+    if (activeInputType === 'image') activeMedia = imagePreview;
+    if (activeInputType === 'video') activeMedia = videoPreview;
+    if (activeInputType === 'webcam') activeMedia = webcamPreview;
+
+    // Resize canvas to match media dimensions
+    annotationCanvas.width = activeMedia.videoWidth || activeMedia.naturalWidth;
+    annotationCanvas.height = activeMedia.videoHeight || activeMedia.naturalHeight;
+    ctx.clearRect(0,0,annotationCanvas.width, annotationCanvas.height);
+
+    // Run person detection
+    const predictions = await personModel.detect(activeMedia, 20, 0.5);
+    let framePersons = 0;
+    let frameViolations = 0;
+
+    predictions.forEach(pred => {
+        if (pred.class === 'person') {
+            framePersons++;
+            // Demo helmet detection rule:
+            // For the standalone demo, if no large object (helmet) is detected in the top 15% of the person bounding box, mark as unsafe
+            // You can replace this with a custom helmet model for production
+            const [x, y, w, h] = pred.bbox;
+            const headAreaY = y;
+            const headAreaH = h * 0.18;
+
+            // Check for helmet in predictions (detect sports ball/helmet class, simple check for demo)
+            const helmetFound = predictions.some(p => {
+                if (p.class !== 'sports ball' && p.class !== 'helmet') return false;
+                const [px, py] = p.bbox;
+                return px > x && px < x + w && py > headAreaY - 20 && py < headAreaY + headAreaH + 20;
+            });
+
+            // Draw bounding box
+            ctx.lineWidth = 4;
+            ctx.font = 'bold 18px sans-serif';
+            if (helmetFound) {
+                // Safe: Green box
+                ctx.strokeStyle = '#16a34a';
+                ctx.fillStyle = '#16a34a';
+                ctx.fillRect(x, y-30, 210, 30);
+                ctx.fillStyle = 'white';
+                ctx.fillText(`SAFE: Helmet Worn`, x+5, y-8);
+                addLogEntry("Person detected", "SAFE: Helmet worn", "safe");
+            } else {
+                // Unsafe: Red box + alarm
+                frameViolations++;
+                ctx.strokeStyle = '#dc2626';
+                ctx.fillStyle = '#dc2626';
+                ctx.fillRect(x, y-30, 230, 30);
+                ctx.fillStyle = 'white';
+                ctx.fillText(`UNSAFE: No Helmet!`, x+5, y-8);
+                addLogEntry("Person detected", "UNSAFE: No helmet!", "danger");
+                playAlarm();
+            }
+            ctx.strokeRect(x, y, w, h);
+        }
+    });
+
+    // Update stats
+    totalPersons = Math.max(totalPersons, framePersons);
+    totalViolations = Math.max(totalViolations, frameViolations);
+    personCount.textContent = totalPersons;
+    violationCount.textContent = totalViolations;
+
+    if (frameViolations > 0) {
+        updateStatus("UNSAFE", "danger");
+    } else if (framePersons > 0) {
+        updateStatus("SITE SAFE", "safe");
+    } else {
+        updateStatus("No Persons Detected", "gray");
+    }
+
+    // Continue loop for video/webcam, stop for static images
+    if (activeInputType !== 'image') {
+        detectionLoop = setTimeout(runDetectionLoop, 100);
+    } else {
+        detectionRunning = false;
+    }
 }
 
-/* Secondary button styling */
-.stButton > button:not([kind="primary"]) {
-    background-color: white;
-    color: #0066cc;
-    border: 2px solid #0066cc;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    transition: all 0.2s ease;
+function updateStatus(text, color) {
+    const colorMap = {
+        safe: 'text-safe',
+        danger: 'text-danger',
+        gray: 'text-gray-500'
+    }
+    const iconMap = {
+        safe: 'fa-circle text-safe',
+        danger: 'fa-exclamation-triangle text-danger',
+        gray: 'fa-circle text-gray-400'
+    }
+    siteStatus.className = `flex items-center gap-2 font-semibold ${colorMap[color]}`;
+    siteStatus.innerHTML = `<i class="fas ${iconMap[color]}"></i> ${text}`;
 }
 
-.stButton > button:not([kind="primary"]):hover {
-    background-color: #f0f8ff;
-    transform: translateY(-1px);
+function addLogEntry(section, message, type) {
+    const time = new Date().toLocaleTimeString();
+    const colorClass = type === 'safe' ? 'text-safe' : 'text-danger';
+    const entry = document.createElement('div');
+    entry.className = `py-1 border-b border-gray-200 ${colorClass}`;
+    entry.innerHTML = `<span class="text-gray-500">${time}</span> | ${section} | <strong>${message}</strong>`;
+    resultsLog.prepend(entry);
 }
 
-/* Metric cards */
-[data-testid="stMetricValue"] {
-    background-color: white;
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+// ==============================================
+// Reset Logic
+// ==============================================
+resetBtn.addEventListener('click', resetAll);
+function resetPreview() {
+    if (webcamStream) {
+        webcamStream.getTracks().forEach(track => track.stop());
+        webcamStream = null;
+    }
+    imagePreview.classList.add('hidden');
+    videoPreview.classList.add('hidden');
+    webcamPreview.classList.add('hidden');
+    mediaPreview.classList.add('hidden');
+    outputPlaceholder.classList.remove('hidden');
+    imagePreview.src = '';
+    videoPreview.src = '';
+    startWebcamBtn.disabled = false;
+    startWebcamBtn.innerHTML = `<i class="fas fa-camera mr-2"></i> Enable Live Webcam`;
+    ctx.clearRect(0,0,annotationCanvas.width, annotationCanvas.height);
 }
-
-/* Card containers */
-div[data-testid="stVerticalBlock"] > div[style*="flex-direction: column"] {
-    background-color: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    margin-bottom: 1rem;
+function resetAll() {
+    detectionRunning = false;
+    clearTimeout(detectionLoop);
+    stopCheck.checked = false;
+    totalPersons = 0;
+    totalViolations = 0;
+    personCount.textContent = 0;
+    violationCount.textContent = 0;
+    resetPreview();
+    updateStatus("IDLE", "gray");
+    resultsLog.innerHTML = `<p class="text-gray-400 text-center mt-16">Run detection to see results</p>`;
+    fileInput.value = '';
 }
-
-/* Status indicators */
-.status-safe {
-    color: #00cc96;
-    font-weight: 600;
-}
-
-.status-unsafe {
-    color: #ef553b;
-    font-weight: 600;
-}
-
-/* Tab styling */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-}
-
-.stTabs [data-baseweb="tab"] {
-    border-radius: 8px 8px 0 0;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-}
-
-/* File uploader styling */
-.stFileUploader {
-    border: 2px dashed #ccc;
-    border-radius: 12px;
-    padding: 2rem;
-    background-color: white;
-    transition: all 0.2s ease;
-}
-
-.stFileUploader:hover {
-    border-color: #0066cc;
-    background-color: #f0f8ff;
-}
-
-/* Progress bar styling */
-.stProgress > div > div > div > div {
-    background-color: #0066cc;
-    border-radius: 4px;
-}
-
-/* Dataframe styling */
-[data-testid="stDataFrame"] {
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-/* Sidebar styling */
-[data-testid="stSidebar"] {
-    background-color: white;
-    border-right: 1px solid #e0e0e0;
-}
-
-/* Warning and error messages */
-.stAlert {
-    border-radius: 8px;
-    padding: 1rem;
-}
-
-/* Info messages */
-.stInfo {
-    border-radius: 8px;
-    padding: 1rem;
-    background-color: #e3f2fd;
-}
-
-/* Success messages */
-.stSuccess {
-    border-radius: 8px;
-    padding: 1rem;
-    background-color: #e8f5e9;
-}
-
-/* Error messages */
-.stError {
-    border-radius: 8px;
-    padding: 1rem;
-    background-color: #ffebee;
-}
-
-/* Segmented control styling */
-.stSegmentedControl {
-    background-color: #f0f0f0;
-    border-radius: 8px;
-    padding: 0.25rem;
-}
-
-/* Selectbox styling */
-.stSelectbox > div > div > select {
-    border-radius: 8px;
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-}
-
-/* Text input styling */
-.stTextInput > div > div > input {
-    border-radius: 8px;
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-}
-
-/* Checkbox styling */
-.stCheckbox > label {
-    font-weight: 500;
-}
-
-/* Header styling */
-h1, h2, h3 {
-    color: #1a1a1a;
-    font-weight: 600;
-}
-
-/* Divider styling */
-hr {
-    border-color: #e0e0e0;
-    margin: 1.5rem 0;
-}
+</script>
+</body>
+</html>
